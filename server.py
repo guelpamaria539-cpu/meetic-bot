@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Serveur API pour l'app mobile du bot Meetic
-Lance sur ton Mac → accède depuis ton téléphone via http://[IP_MAC]:5002
+Lance sur ton Mac → accès depuis ton téléphone via http://[IP_MAC]:5002
 """
 
 import json
@@ -15,14 +15,12 @@ BASE_DIR = os.path.expanduser("~/whatsapp-mcp-old/whatsapp-mcp")
 PERSONAS_DIR = os.path.join(BASE_DIR, "personas")
 MEMORY_FILE = os.path.join(BASE_DIR, "meetic_memory.json")
 ACTIVE_PERSONA_FILE = os.path.join(BASE_DIR, "active_persona.txt")
-MAX_HISTORY = 6000          # Messages max sauvegardés sur disque
-CONTEXT_MESSAGES = 30       # Messages récents envoyés à Claude
-SUMMARY_EVERY_N = 20        # Générer un résumé tous les N échanges
+MAX_HISTORY = 6000
+CONTEXT_MESSAGES = 30
+SUMMARY_EVERY_N = 20
 
 app = Flask(__name__, static_folder="static")
 CORS(app)
-
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 # ─── JSONBIN CONFIG ──────────────────────────────────────────────────────────
 JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "6a2703dfda38895dfe9b5f7f")
@@ -31,7 +29,6 @@ JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY", "$2a$10$It5.OZ/3pjhYaK5cvtKO
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 
 def load_memory():
-    # Essaie d'abord JSONBin (cloud), sinon fichier local
     try:
         import requests as _req
         resp = _req.get(
@@ -45,8 +42,6 @@ def load_memory():
                 return data
     except Exception as e:
         print(f"[JSONBin] Erreur lecture: {e}")
-    
-    # Fallback fichier local
     if os.path.exists(MEMORY_FILE):
         try:
             with open(MEMORY_FILE, "r", encoding="utf-8") as f:
@@ -56,7 +51,6 @@ def load_memory():
     return {"historique": {}, "contacts": {}, "aliases": {}}
 
 def save_memory(memory):
-    # Sauvegarde sur JSONBin (cloud)
     try:
         import requests as _req
         resp = _req.put(
@@ -75,8 +69,6 @@ def save_memory(memory):
             print(f"[JSONBin] Erreur sauvegarde: {resp.status_code}")
     except Exception as e:
         print(f"[JSONBin] Erreur: {e}")
-    
-    # Fallback fichier local
     try:
         with open(MEMORY_FILE, "w", encoding="utf-8") as f:
             json.dump(memory, f, ensure_ascii=False, indent=2)
@@ -84,7 +76,6 @@ def save_memory(memory):
         print(f"[Local] Erreur sauvegarde: {e}")
 
 def list_personas():
-    # D'abord depuis JSONBin
     try:
         memory = load_memory()
         personas = memory.get("personas", {})
@@ -92,13 +83,11 @@ def list_personas():
             return list(personas.keys())
     except Exception:
         pass
-    # Fallback local
     if not os.path.exists(PERSONAS_DIR):
         return []
     return [f.replace(".json", "") for f in os.listdir(PERSONAS_DIR) if f.endswith(".json")]
 
 def load_persona(nom):
-    # D'abord depuis JSONBin
     try:
         memory = load_memory()
         personas = memory.get("personas", {})
@@ -106,7 +95,6 @@ def load_persona(nom):
             return personas[nom.lower()]
     except Exception:
         pass
-    # Fallback local
     path = os.path.join(PERSONAS_DIR, f"{nom.lower()}.json")
     if not os.path.exists(path):
         return None
@@ -144,11 +132,9 @@ def get_all_contacts():
     memory = load_memory()
     persona = get_active_persona()
     all_contacts = {}
-    # Depuis la persona
     if persona:
         for nom, data in persona.get("contacts", {}).items():
             all_contacts[nom] = data
-    # Depuis la mémoire globale
     for nom, data in memory.get("contacts", {}).items():
         if nom not in all_contacts:
             all_contacts[nom] = data
@@ -171,7 +157,6 @@ def get_env_api_key():
     return os.getenv("ANTHROPIC_API_KEY", "")
 
 def get_groq_api_key():
-    # Variable Railway en priorité, sinon clé par défaut
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
         env_file = os.path.join(BASE_DIR, ".env")
@@ -184,15 +169,12 @@ def get_groq_api_key():
     return key or GROQ_API_KEY_DEFAULT
 
 def get_ai_provider():
-    """Retourne 'groq' si clé Groq dispo, sinon 'anthropic'"""
     if get_groq_api_key():
         return "groq"
     return "anthropic"
 
 def call_ai(system_prompt, user_message, max_tokens=500):
-    """Appelle Groq ou Anthropic selon la config"""
     provider = get_ai_provider()
-    
     if provider == "groq":
         import requests as _requests
         api_key = get_groq_api_key()
@@ -229,10 +211,6 @@ def call_ai(system_prompt, user_message, max_tokens=500):
         return response.content[0].text.strip()
 
 def generate_summary(contact_name, persona, history, api_key):
-    """
-    Génère un résumé intelligent de la relation tous les SUMMARY_EVERY_N échanges.
-    Sauvegardé dans meetic_memory.json sous contacts[nom][resume]
-    """
     try:
         hist_text = "\n".join([
             f"{'LUI' if h['role']=='lui' else persona['nom'].upper()}: {h['content']}"
@@ -257,26 +235,80 @@ Max 200 mots. Sois factuel.""",
         print(f"[Résumé] Erreur: {e}")
         return ""
 
+# ─── CONTEXTE TEMPOREL ENRICHI ───────────────────────────────────────────────
+
+def get_temporal_context():
+    """
+    Retourne un contexte temporel complet : date, heure, moment de la journée,
+    jour de semaine, contexte de vie de la persona, et indication weekend/semaine.
+    """
+    now = datetime.datetime.now()
+    jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin",
+               "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+    jour_semaine = jours_fr[now.weekday()]
+    date_str = f"{jour_semaine} {now.day} {mois_fr[now.month - 1]} {now.year}"
+    heure_str = now.strftime("%H:%M")
+    est_weekend = now.weekday() >= 5
+
+    h = now.hour
+    if 6 <= h < 9:
+        moment = "tôt le matin"
+        ton = "ton frais et naturel — message court, elle vient de se lever"
+        contexte_vie = "Laurine vient de se réveiller, peut-être fait son yoga ou prend son café"
+    elif 9 <= h < 12:
+        moment = "matinée"
+        ton = "ton décontracté et énergique — elle est active"
+        contexte_vie = "Laurine gère ses commandes cosmétiques ou fait ses courses"
+    elif 12 <= h < 14:
+        moment = "midi"
+        ton = "ton posé, elle mange ou prend une pause"
+        contexte_vie = "Laurine est en pause déjeuner, cuisine ou mange seule chez elle"
+    elif 14 <= h < 17:
+        moment = "après-midi"
+        ton = "ton normal et disponible"
+        contexte_vie = "Laurine gère son business cosmétiques ou regarde une série"
+    elif 17 <= h < 20:
+        moment = "fin d'après-midi"
+        ton = "ton chaleureux, elle se détend"
+        contexte_vie = "Laurine rentre, cuisine ou se prépare pour la soirée"
+    elif 20 <= h < 23:
+        moment = "soirée"
+        ton = "ton posé et intime — c'est l'heure des vraies conversations"
+        contexte_vie = "Laurine est chez elle, regarde une série ou scrolle son téléphone"
+    else:
+        moment = "nuit"
+        ton = "message très court — bonne nuit si c'est le dernier échange"
+        contexte_vie = "Laurine est fatiguée, se couche bientôt"
+
+    if est_weekend:
+        weekend_ctx = f"C'est le {jour_semaine} — Laurine est libre, rythme décontracté, peut sortir avec des amies."
+    else:
+        weekend_ctx = f"C'est le {jour_semaine} — semaine normale, Laurine a son rythme habituel."
+
+    return {
+        "now": now,
+        "heure": heure_str,
+        "date_str": date_str,
+        "moment": moment,
+        "ton": ton,
+        "contexte_vie": contexte_vie,
+        "weekend_ctx": weekend_ctx,
+        "est_weekend": est_weekend,
+        "jour_semaine": jour_semaine,
+    }
+
 def build_prompt(contact_name, persona, memory):
     contact = get_all_contacts().get(contact_name, {})
-    now = datetime.datetime.now()
-    jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-    jour = jours[now.weekday()]
-    if 6 <= now.hour < 11: moment = "matin"
-    elif 11 <= now.hour < 14: moment = "midi"
-    elif 14 <= now.hour < 18: moment = "après-midi"
-    elif 18 <= now.hour < 22: moment = "soir"
-    else: moment = "nuit"
+    tc = get_temporal_context()
 
     hist = memory.get("historique", {}).get(contact_name, [])
-    
-    # Résumé de la relation (généré automatiquement)
+
     resume = contact.get("resume", "")
     resume_section = ""
     if resume:
         resume_section = f"\nRÉSUMÉ DE LA RELATION :\n{resume}\n"
 
-    # Seulement les CONTEXT_MESSAGES derniers messages envoyés à Claude
     hist_recent = hist[-CONTEXT_MESSAGES:]
     hist_text = ""
     if hist_recent:
@@ -288,7 +320,10 @@ def build_prompt(contact_name, persona, memory):
     return f"""Tu es {persona['nom']}. Profil :
 {persona['profil']}
 
-Date : {jour} {now.strftime('%d/%m/%Y')} à {now.strftime('%H:%M')} ({moment})
+DATE ET HEURE EXACTES : {tc['date_str']} à {tc['heure']}
+MOMENT : {tc['moment']} — {tc['ton']}
+CONTEXTE DE VIE EN CE MOMENT : {tc['contexte_vie']}
+{tc['weekend_ctx']}
 
 Contact : {contact_name}
 Registre : {contact.get('registre', 'tutoiement')}
@@ -299,7 +334,9 @@ Sincérité observée : {contact.get('feeling', '')}
 Niveau d'intérêt : {contact.get('interet', '')}
 {resume_section}{hist_text}
 
-RÈGLES : Tu es {persona['nom']}, jamais une IA. Style SMS naturel. Max 2-3 phrases. Pas de signature. Réponds uniquement avec le message."""
+RÈGLES : Tu es {persona['nom']}, jamais une IA. Style SMS naturel. Max 2-3 phrases. Pas de signature.
+Adapte NATURELLEMENT ton message au moment de la journée — si c'est le soir mentionne ce que tu fais ce soir, si c'est le matin fais référence à ton matin, etc. Sans être mécanique.
+Réponds uniquement avec le message."""
 
 # ─── ROUTES API ───────────────────────────────────────────────────────────────
 
@@ -310,10 +347,14 @@ def index():
 @app.route("/api/status")
 def status():
     persona = get_active_persona()
+    tc = get_temporal_context()
     return jsonify({
         "persona": persona["nom"] if persona else "aucune",
         "personas": list_personas(),
-        "contacts_count": len(get_all_contacts())
+        "contacts_count": len(get_all_contacts()),
+        "heure": tc["heure"],
+        "moment": tc["moment"],
+        "date": tc["date_str"]
     })
 
 @app.route("/api/personas")
@@ -332,7 +373,6 @@ def switch_persona():
     if not load_persona(nom):
         return jsonify({"error": "Persona introuvable"}), 404
     set_active_persona_name(nom)
-    # Aussi local si dispo
     try:
         with open(ACTIVE_PERSONA_FILE, "w") as f:
             f.write(nom)
@@ -385,13 +425,6 @@ def get_history(nom):
     return jsonify({"history": result, "persona": persona_nom})
 
 def extract_and_update_profile(contact_name, message_recu, reponse_bot, api_key):
-    """
-    Après chaque échange, analyse le message reçu et extrait :
-    - Nouvelles infos sur la vie de l'interlocuteur
-    - Sa sincérité / son niveau d'intérêt
-    - Des détails personnels utiles pour Laurine
-    Met à jour la fiche contact automatiquement.
-    """
     try:
         memory = load_memory()
         contact = get_all_contacts().get(contact_name, {})
@@ -399,7 +432,6 @@ def extract_and_update_profile(contact_name, message_recu, reponse_bot, api_key)
         points_communs = contact.get("points_communs", "")
         historique = memory.get("historique", {}).get(contact_name, [])
 
-        # Contexte des derniers échanges
         hist_context = "\n".join([
             f"{'LUI' if h['role']=='lui' else 'LAURINE'}: {h['content']}"
             for h in historique[-10:]
@@ -445,7 +477,6 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
         if not data.get("a_mis_a_jour", False):
             return
 
-        # Construire les nouvelles infos en fusionnant avec les anciennes
         nouvelles = data.get("nouvelles_infos", "").strip()
         nouveaux_points = data.get("points_communs", "").strip()
         details = data.get("details_cles", "").strip()
@@ -471,7 +502,6 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
         if data.get("niveau_interet"):
             contact["interet"] = data["niveau_interet"]
 
-        # Sauvegarder
         if "contacts" not in memory:
             memory["contacts"] = {}
         memory["contacts"][contact_name] = contact
@@ -498,17 +528,69 @@ def generate():
     memory = load_memory()
     system_prompt = build_prompt(contact_name, persona, memory)
 
-    # Ajouter le contexte au message si fourni
     message_with_context = message
     if context:
         message_with_context = f"{message}\n\n[CONTEXTE IMPORTANT: {context}]"
 
     try:
         reply = call_ai(system_prompt, message_with_context, max_tokens=500)
+        tc = get_temporal_context()
         provider = get_ai_provider()
-        return jsonify({"response": reply, "persona": persona["nom"], "provider": provider})
+        return jsonify({
+            "response": reply,
+            "persona": persona["nom"],
+            "provider": provider,
+            "heure": tc["heure"],
+            "moment": tc["moment"]
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ─── NOUVELLE ROUTE : TRADUCTION ─────────────────────────────────────────────
+
+LANGUES_DISPO = {
+    "en": "anglais",
+    "de": "allemand",
+    "it": "italien"
+}
+
+@app.route("/api/translate", methods=["POST"])
+def translate():
+    """
+    Traduit un message dans la langue cible en conservant le style SMS naturel.
+    Body JSON : { "texte": "...", "langue": "en" | "de" | "it" }
+    """
+    data = request.json
+    texte = data.get("texte", "").strip()
+    langue_code = data.get("langue", "").strip().lower()
+
+    if not texte:
+        return jsonify({"error": "Texte requis"}), 400
+    if langue_code not in LANGUES_DISPO:
+        return jsonify({"error": f"Langue inconnue. Valeurs acceptées : {', '.join(LANGUES_DISPO.keys())}"}), 400
+
+    langue_nom = LANGUES_DISPO[langue_code]
+
+    system_prompt = "Tu es un traducteur de SMS naturels. Tu traduis en conservant exactement le ton, la longueur, la ponctuation légère et les emojis. Tu retournes UNIQUEMENT le message traduit, rien d'autre."
+
+    user_prompt = f"""Traduis ce message en {langue_nom}.
+Conserve le style SMS naturel : même longueur, même ton décontracté, mêmes emojis si présents. Traduction fidèle au style, pas de reformulation.
+
+Message original :
+{texte}"""
+
+    try:
+        traduit = call_ai(system_prompt, user_prompt, max_tokens=300)
+        return jsonify({
+            "traduit": traduit,
+            "langue": langue_code,
+            "langue_nom": langue_nom
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.route("/api/save", methods=["POST"])
 def save_exchange():
@@ -544,10 +626,8 @@ def save_exchange():
             "plateforme": "meetic"
         })
 
-    # Limite 6000 messages sur disque
     memory["historique"][contact_name] = memory["historique"][contact_name][-MAX_HISTORY:]
 
-    # Mise à jour stade
     hist_len = len(memory["historique"][contact_name])
     if "contacts" not in memory:
         memory["contacts"] = {}
@@ -560,14 +640,12 @@ def save_exchange():
 
     save_memory(memory)
 
-    # Traitements en arrière-plan
     if message_recu and reponse_envoyee:
         api_key = get_env_api_key()
         if api_key:
             import threading
             persona = get_active_persona()
 
-            # 1. Extraction profil à chaque échange
             t1 = threading.Thread(
                 target=extract_and_update_profile,
                 args=(contact_name, message_recu, reponse_envoyee, api_key),
@@ -575,7 +653,6 @@ def save_exchange():
             )
             t1.start()
 
-            # 2. Résumé tous les SUMMARY_EVERY_N échanges
             nb_echanges = hist_len // 2
             if nb_echanges > 0 and nb_echanges % SUMMARY_EVERY_N == 0 and persona:
                 def update_summary():
@@ -624,7 +701,6 @@ def delete_persona():
         return jsonify({"error": "Persona introuvable"}), 404
     del personas[nom]
     memory["personas"] = personas
-    # Si c'était la persona active, repasser sur laurine
     if memory.get("active_persona", "") == nom:
         memory["active_persona"] = "laurine"
     save_memory(memory)
@@ -644,8 +720,8 @@ def pause_contact():
         memory["contacts"][nom] = {}
     memory["contacts"][nom]["paused"] = paused
     save_memory(memory)
-    status = "mis en pause" if paused else "réactivé"
-    print(f"[Pause] {nom} {status}")
+    status_txt = "mis en pause" if paused else "réactivé"
+    print(f"[Pause] {nom} {status_txt}")
     return jsonify({"success": True, "paused": paused})
 
 @app.route("/api/contact/delete", methods=["POST"])
@@ -655,18 +731,14 @@ def delete_contact():
     if not nom:
         return jsonify({"error": "Nom requis"}), 400
     memory = load_memory()
-    # Supprimer du contact list
     if "contacts" in memory and nom in memory["contacts"]:
         del memory["contacts"][nom]
-    # Supprimer l'historique
     if "historique" in memory and nom in memory["historique"]:
         del memory["historique"][nom]
-    # Supprimer les aliases pointant vers ce contact
     if "aliases" in memory:
         to_delete = [k for k, v in memory["aliases"].items() if v == nom]
         for k in to_delete:
             del memory["aliases"][k]
-    # Supprimer aussi de la persona active
     persona = get_active_persona()
     if persona and nom in persona.get("contacts", {}):
         del persona["contacts"][nom]
@@ -683,18 +755,15 @@ def link_contact_whatsapp():
     if not phone or not contact_name:
         return jsonify({"error": "Numéro et contact requis"}), 400
 
-    # Nettoyer le numéro (enlever +, espaces)
     phone_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
 
     memory = load_memory()
     if "aliases" not in memory:
         memory["aliases"] = {}
 
-    # Créer l'alias numéro → nom contact
     memory["aliases"][phone_clean] = contact_name
     memory["aliases"][phone] = contact_name
 
-    # Ajouter whatsapp aux plateformes du contact
     if "contacts" not in memory:
         memory["contacts"] = {}
     if contact_name not in memory["contacts"]:
@@ -704,7 +773,6 @@ def link_contact_whatsapp():
         plateformes.append("whatsapp")
     memory["contacts"][contact_name]["plateformes"] = plateformes
 
-    # Fusionner historique WhatsApp existant si présent
     if phone_clean in memory.get("historique", {}) and phone_clean != contact_name:
         existing_hist = memory["historique"].pop(phone_clean, [])
         current_hist = memory["historique"].get(contact_name, [])
@@ -759,10 +827,12 @@ if __name__ == "__main__":
         ip = socket.gethostbyname(hostname)
     except Exception:
         ip = "127.0.0.1"
+    tc = get_temporal_context()
     print("\n" + "="*55)
     print("  APP MOBILE BOT MEETIC")
     print("="*55)
     print(f"\n✅ Serveur démarré !")
+    print(f"🕐 {tc['date_str']} à {tc['heure']} — {tc['moment']}")
     print(f"\n📱 Ouvre cette URL sur ton téléphone (même WiFi) :")
     print(f"   http://{ip}:5002")
     print(f"\n💻 Sur ton Mac :")

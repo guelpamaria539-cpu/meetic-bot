@@ -340,7 +340,6 @@ body {
         oninput="autoResize(this)"></textarea>
       <button class="send-btn" id="send-btn" onclick="generateResponse()">✨</button>
     </div>
-    <textarea class="msg-input" id="context-input" placeholder="📌 Contexte (optionnel) — ex: il vient de me donner son numéro, on s'est disputé hier, c'est son premier message..." rows="1" style="margin-top:6px;font-size:12px;color:var(--accent)" oninput="autoResize(this)"></textarea>
 
     <div class="response-preview" id="response-preview">
       <div class="loading" id="loading-indicator" style="display:none">
@@ -410,40 +409,6 @@ body {
     <div class="persona-list" id="persona-list"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('persona-modal')">Fermer</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════ -->
-<!-- MODAL: LINK WHATSAPP -->
-<!-- ══════════════════════════════════════════ -->
-<div class="modal-overlay" id="link-whatsapp-modal">
-  <div class="modal">
-    <h2>Lier un numéro WhatsApp</h2>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Le bot WhatsApp reconnaîtra automatiquement ce contact et chargera tout son historique.</p>
-    <label class="modal-label">Numéro WhatsApp *</label>
-    <input class="modal-input" id="link-phone-input" placeholder="+33612345678" type="tel">
-    <p style="font-size:12px;color:var(--text2);margin-top:4px">Format international avec le + (ex: +33612345678)</p>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="linkWhatsapp()">🔗 Lier</button>
-      <button class="btn btn-secondary" onclick="closeModal('link-whatsapp-modal')">Annuler</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════ -->
-<!-- MODAL: CREATE PERSONA -->
-<!-- ══════════════════════════════════════════ -->
-<div class="modal-overlay" id="create-persona-modal">
-  <div class="modal">
-    <h2>Nouvelle persona</h2>
-    <label class="modal-label">Prénom *</label>
-    <input class="modal-input" id="new-persona-nom" placeholder="Sophie, Marc, Emma...">
-    <label class="modal-label">Profil complet * (âge, ville, situation, personnalité, règles...)</label>
-    <textarea class="modal-input" id="new-persona-profil" rows="8" placeholder="Tu es Sophie, 32 ans, basée à Paris..."></textarea>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="createPersona()">✓ Créer</button>
-      <button class="btn btn-secondary" onclick="closeModal('create-persona-modal')">Annuler</button>
     </div>
   </div>
 </div>
@@ -606,7 +571,6 @@ async function generateResponse() {
   const msg = document.getElementById('msg-input').value.trim();
   if (!msg || !currentContact) return;
   currentMessage = msg;
-  const context = document.getElementById('context-input').value.trim();
 
   const preview = document.getElementById('response-preview');
   const loading = document.getElementById('loading-indicator');
@@ -621,14 +585,12 @@ async function generateResponse() {
   actions.style.display = 'none';
   editArea.classList.remove('visible');
   sendBtn.disabled = true;
-  sendBtn.textContent = '⏳';
-  sendBtn.style.opacity = '0.7';
 
   try {
     const res = await fetch(`${API}/api/generate`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({contact: currentContact, message: msg, context: context})
+      body: JSON.stringify({contact: currentContact, message: msg})
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -642,8 +604,6 @@ async function generateResponse() {
     actions.style.display = 'flex';
   }
   sendBtn.disabled = false;
-  sendBtn.textContent = '✨';
-  sendBtn.style.opacity = '1';
 }
 
 async function validateResponse() {
@@ -659,12 +619,8 @@ async function validateResponse() {
     });
     document.getElementById('response-preview').classList.remove('visible');
     document.getElementById('msg-input').value = '';
-    document.getElementById('context-input').value = '';
     showToast('✓ Échange sauvegardé', 'success');
     await loadHistory(currentContact);
-    // Auto-scroll vers le bas
-    const chatMsgs = document.getElementById('chat-messages');
-    chatMsgs.scrollTop = chatMsgs.scrollHeight;
   } catch(e) {
     showToast('Erreur sauvegarde', 'error');
   }
@@ -705,121 +661,10 @@ async function openPersonaModal() {
         <div class="contact-avatar" style="width:36px;height:36px;font-size:15px">${p.nom.charAt(0)}</div>
         <div class="persona-item-name">${p.nom}</div>
         ${p.nom.toLowerCase() === activePersona.toLowerCase() ? '<span class="persona-item-check">✓</span>' : ''}
-        ${p.nom.toLowerCase() !== 'laurine' ? `<span onclick="event.stopPropagation(); deletePersona('${p.slug}', '${p.nom}')" style="margin-left:auto;color:var(--red);font-size:18px;padding:4px 8px;">🗑</span>` : ''}
       </div>
-    `).join('') + `
-      <div class="persona-item" onclick="closeModal('persona-modal'); openCreatePersonaModal()">
-        <div class="contact-avatar" style="width:36px;height:36px;font-size:15px;background:rgba(201,169,110,0.2)">+</div>
-        <div class="persona-item-name" style="color:var(--accent)">Creer une nouvelle persona</div>
-      </div>`;
+    `).join('');
   } catch(e) {}
   document.getElementById('persona-modal').classList.add('visible');
-}
-
-function openCreatePersonaModal() {
-  document.getElementById('new-persona-nom').value = '';
-  document.getElementById('new-persona-profil').value = '';
-  document.getElementById('create-persona-modal').classList.add('visible');
-}
-
-async function togglePause() {
-  if (!currentContact || !currentContactData) return;
-  const newPaused = !currentContactData.paused;
-  try {
-    const res = await fetch(`${API}/api/contact/pause`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nom: currentContact, paused: newPaused})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    currentContactData.paused = newPaused;
-    showToast(newPaused ? '⏸ Bot en pause pour ' + currentContact : '▶ Bot réactivé pour ' + currentContact, 'success');
-    await showDetail();
-    await loadContacts();
-  } catch(e) {
-    showToast('Erreur: ' + e.message, 'error');
-  }
-}
-
-async function deleteContact() {
-  if (!currentContact) return;
-  if (!confirm('Supprimer ' + currentContact + ' et tout son historique ?')) return;
-  try {
-    const res = await fetch(`${API}/api/contact/delete`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nom: currentContact})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    showToast(currentContact + ' supprimé', 'success');
-    currentContact = null;
-    showScreen('contacts');
-  } catch(e) {
-    showToast('Erreur: ' + e.message, 'error');
-  }
-}
-
-function openLinkWhatsappModal() {
-  document.getElementById('link-phone-input').value = '';
-  document.getElementById('link-whatsapp-modal').classList.add('visible');
-}
-
-async function linkWhatsapp() {
-  const phone = document.getElementById('link-phone-input').value.trim();
-  if (!phone) { showToast('Numéro requis', 'error'); return; }
-  if (!currentContact) { showToast('Aucun contact sélectionné', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/api/contact/link`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({phone, contact: currentContact})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    closeModal('link-whatsapp-modal');
-    showToast('📱 ' + currentContact + ' lié à ' + phone, 'success');
-    await showDetail();
-  } catch(e) {
-    showToast('Erreur: ' + e.message, 'error');
-  }
-}
-
-async function deletePersona(slug, nom) {
-  if (!confirm('Supprimer la persona ' + nom + ' ?')) return;
-  try {
-    const res = await fetch(`${API}/api/persona/delete`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nom: slug})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    showToast(nom + ' supprimee', 'success');
-    openPersonaModal();
-  } catch(e) {
-    showToast('Erreur: ' + e.message, 'error');
-  }
-}
-
-async function createPersona() {
-  const nom = document.getElementById('new-persona-nom').value.trim();
-  const profil = document.getElementById('new-persona-profil').value.trim();
-  if (!nom || !profil) { showToast('Nom et profil requis', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/api/persona/create`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({nom, profil})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    closeModal('create-persona-modal');
-    showToast('Persona creee !', 'success');
-  } catch(e) {
-    showToast('Erreur: ' + e.message, 'error');
-  }
 }
 
 async function switchPersona(slug, nom) {
@@ -909,11 +754,8 @@ async function showDetail() {
         <h3>Messages en mémoire</h3>
         <div class="detail-value">${c.messages_count} / 150</div>
       </div>
-      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+      <div style="margin-top:16px">
         <button class="btn btn-primary" style="width:100%" onclick="openEditInfosModal()">✏️ Modifier les infos</button>
-        <button class="btn btn-secondary" style="width:100%" onclick="openLinkWhatsappModal()">📱 Lier un numéro WhatsApp</button>
-        <button class="btn ${c.paused ? 'btn-primary' : 'btn-secondary'}" id="pause-btn" style="width:100%" onclick="togglePause()">${c.paused ? '▶ Réactiver le bot' : '⏸ Mettre en pause'}</button>
-        <button class="btn btn-danger" style="width:100%" onclick="deleteContact()">🗑 Supprimer ce contact</button>
       </div>
     `;
   } catch(e) {}
