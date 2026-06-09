@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Bot Rencontre</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --surface2: #1c1c26;
+  --border: #2a2a3a;
+  --accent: #c9a96e;
+  --accent2: #e8c99a;
+  --text: #f0ede8;
+  --text2: #9994a8;
+  --red: #e05555;
+  --green: #5ab87a;
+  --blue: #6b9fd4;
+  --radius: 16px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; min-height: 100vh; }
+.screen.active { display: flex; }
+
+/* ── HEADER ── */
+.header {
+  padding: calc(var(--safe-top) + 16px) 20px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+}
+.header-inner { display: flex; align-items: center; gap: 12px; }
+.header h1 { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 600; color: var(--accent); flex: 1; }
+.header-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.back-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* ── PERSONA BADGE ── */
+.persona-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 20px;
+  background: linear-gradient(135deg, rgba(201,169,110,0.2), rgba(201,169,110,0.05));
+  border: 1px solid rgba(201,169,110,0.3);
+  font-size: 13px; color: var(--accent); cursor: pointer;
+  transition: all 0.2s;
+}
+.persona-badge:hover { background: rgba(201,169,110,0.25); }
+.persona-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+/* ── CONTENT ── */
+.content { flex: 1; overflow-y: auto; padding: 16px 20px; padding-bottom: calc(var(--safe-bottom) + 80px); }
+
+/* ── CONTACTS LIST ── */
+.contacts-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.contact-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.contact-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.contact-card:active { background: var(--surface2); transform: scale(0.99); }
+.contact-card:active::before { opacity: 1; }
+
+.contact-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.contact-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--surface2));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif; font-size: 18px; color: var(--bg);
+  font-weight: 600; flex-shrink: 0;
+}
+.contact-info { flex: 1; min-width: 0; }
+.contact-name { font-size: 16px; font-weight: 500; color: var(--text); }
+.contact-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.contact-preview { font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-count { font-size: 11px; color: var(--accent); background: rgba(201,169,110,0.1); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+
+.stade-badge {
+  display: inline-block; font-size: 10px; padding: 2px 8px;
+  border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.stade-debut { background: rgba(107,159,212,0.15); color: var(--blue); }
+.stade-connaissance { background: rgba(201,169,110,0.15); color: var(--accent); }
+.stade-attachement { background: rgba(90,184,122,0.15); color: var(--green); }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 0 calc(var(--safe-bottom) + 8px);
+  display: flex; justify-content: space-around;
+  z-index: 200;
+}
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 20px; cursor: pointer; color: var(--text2); font-size: 11px; transition: color 0.2s; }
+.nav-item.active { color: var(--accent); }
+.nav-icon { font-size: 22px; }
+
+/* ── CHAT SCREEN ── */
+.chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; padding-bottom: 180px; }
+
+.msg { max-width: 80%; }
+.msg.from-lui { align-self: flex-start; }
+.msg.from-bot { align-self: flex-end; }
+
+.msg-bubble {
+  padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.5;
+  position: relative;
+}
+.msg.from-lui .msg-bubble { background: var(--surface2); border-bottom-left-radius: 4px; }
+.msg.from-bot .msg-bubble { background: linear-gradient(135deg, rgba(201,169,110,0.3), rgba(201,169,110,0.15)); border: 1px solid rgba(201,169,110,0.2); border-bottom-right-radius: 4px; }
+.msg-time { font-size: 10px; color: var(--text2); margin-top: 4px; padding: 0 4px; }
+.msg.from-bot .msg-time { text-align: right; }
+
+/* ── INPUT AREA ── */
+.input-area {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px calc(var(--safe-bottom) + 12px);
+}
+.input-contact-name { font-size: 12px; color: var(--accent); margin-bottom: 8px; font-style: italic; }
+
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+.msg-input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 14px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; resize: none;
+  outline: none; max-height: 100px; min-height: 42px;
+  transition: border-color 0.2s;
+}
+.msg-input:focus { border-color: rgba(201,169,110,0.4); }
+.msg-input::placeholder { color: var(--text2); }
+
+.send-btn {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), #b8914a);
+  border: none; color: var(--bg); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.1s, opacity 0.2s;
+}
+.send-btn:active { transform: scale(0.95); }
+.send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── RESPONSE PREVIEW ── */
+.response-preview {
+  background: var(--surface2);
+  border: 1px solid rgba(201,169,110,0.3);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 10px;
+  display: none;
+}
+.response-preview.visible { display: block; }
+.response-text { font-size: 14px; line-height: 1.6; color: var(--text); margin-bottom: 12px; white-space: pre-wrap; }
+.response-actions { display: flex; gap: 8px; }
+
+.btn { padding: 9px 16px; border-radius: 10px; border: none; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; flex: 1; }
+.btn-primary { background: linear-gradient(135deg, var(--accent), #b8914a); color: var(--bg); }
+.btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text2); }
+.btn-danger { background: rgba(224,85,85,0.15); border: 1px solid rgba(224,85,85,0.3); color: var(--red); }
+.btn:active { transform: scale(0.97); }
+
+/* ── EDIT RESPONSE ── */
+.edit-area { display: none; margin-top: 8px; }
+.edit-area.visible { display: block; }
+.edit-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; resize: none; outline: none; min-height: 80px; }
+.edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 300;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 20px;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.modal-overlay.visible { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 24px; width: 100%; max-width: 500px;
+  padding: 24px; max-height: 80vh; overflow-y: auto;
+  transform: translateY(20px); transition: transform 0.3s;
+}
+.modal-overlay.visible .modal { transform: translateY(0); }
+.modal h2 { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--accent); margin-bottom: 16px; }
+.modal-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; margin-bottom: 10px; }
+.modal-input:focus { border-color: rgba(201,169,110,0.4); }
+.modal-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; display: block; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.persona-list { display: flex; flex-direction: column; gap: 8px; }
+.persona-item { padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.2s; }
+.persona-item:active { background: var(--bg); }
+.persona-item.active-persona { border-color: rgba(201,169,110,0.4); background: rgba(201,169,110,0.05); }
+.persona-item-name { font-size: 15px; font-weight: 500; }
+.persona-item-check { margin-left: auto; color: var(--accent); font-size: 18px; }
+
+/* ── LOADING ── */
+.loading { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 13px; padding: 8px 0; }
+.loading-dots span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: bounce 1.2s infinite; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+/* ── EMPTY STATE ── */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text); margin-bottom: 8px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 10px 20px; font-size: 13px;
+  opacity: 0; transition: all 0.3s; z-index: 400; white-space: nowrap;
+}
+.toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: rgba(90,184,122,0.4); color: var(--green); }
+.toast.error { border-color: rgba(224,85,85,0.4); color: var(--red); }
+
+/* ── ADD CONTACT FAB ── */
+.fab {
+  position: fixed; bottom: 80px; right: 20px;
+  width: 52px; height: 52px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), #b8914a);
+  border: none; color: var(--bg); font-size: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(201,169,110,0.3);
+  transition: transform 0.2s;
+  z-index: 150;
+}
+.fab:active { transform: scale(0.95); }
+
+/* ── CONTACT DETAIL ── */
+.detail-section { margin-bottom: 20px; }
+.detail-section h3 { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.detail-value { font-size: 14px; color: var(--text); background: var(--surface2); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: CONTACTS LIST -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen active" id="screen-contacts">
+  <div class="header">
+    <div class="header-inner">
+      <div>
+        <h1>Mes Contacts</h1>
+        <div class="header-sub" id="header-sub">Chargement...</div>
+      </div>
+      <div class="persona-badge" id="persona-badge" onclick="openPersonaModal()">
+        <div class="persona-dot"></div>
+        <span id="persona-name">...</span>
+      </div>
+    </div>
+  </div>
+  <div class="content" id="contacts-list">
+    <div class="empty-state">
+      <div class="loading"><div class="loading-dots"><span></span><span></span><span></span></div> Chargement...</div>
+    </div>
+  </div>
+  <button class="fab" onclick="openAddContactModal()">＋</button>
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="showScreen('contacts')">
+      <span class="nav-icon">💬</span>
+      <span>Contacts</span>
+    </div>
+    <div class="nav-item" onclick="showScreen('settings')">
+      <span class="nav-icon">⚙️</span>
+      <span>Réglages</span>
+    </div>
+  </nav>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: CHAT -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen" id="screen-chat">
+  <div class="header">
+    <div class="header-inner">
+      <button class="back-btn" onclick="showScreen('contacts')">←</button>
+      <div>
+        <h1 id="chat-name">Contact</h1>
+        <div class="header-sub" id="chat-sub"></div>
+      </div>
+      <div class="persona-badge" style="font-size:11px" onclick="showScreen('detail')">Fiche</div>
+    </div>
+  </div>
+
+  <div class="chat-messages" id="chat-messages">
+    <div class="empty-state">
+      <div class="empty-icon">✉️</div>
+      <div class="empty-title">Début de la conversation</div>
+      <div style="font-size:13px">Colle un message reçu ci-dessous pour générer une réponse.</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-contact-name" id="input-contact-label"></div>
+    <div class="input-row">
+      <textarea class="msg-input" id="msg-input" placeholder="Colle le message reçu..." rows="1"
+        oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="generateResponse()">✨</button>
+    </div>
+    <textarea class="msg-input" id="context-input" placeholder="📌 Contexte (optionnel) — ex: il vient de me donner son numéro, on s'est disputé hier, c'est son premier message..." rows="1" style="margin-top:6px;font-size:12px;color:var(--accent)" oninput="autoResize(this)"></textarea>
+
+    <div class="response-preview" id="response-preview">
+      <div class="loading" id="loading-indicator" style="display:none">
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        Génération en cours...
+      </div>
+      <div class="response-text" id="response-text"></div>
+      <div class="edit-area" id="edit-area">
+        <textarea class="edit-input" id="edit-input"></textarea>
+        <div class="edit-actions">
+          <button class="btn btn-primary" onclick="saveEdited()">Sauvegarder</button>
+          <button class="btn btn-secondary" onclick="cancelEdit()">Annuler</button>
+        </div>
+      </div>
+      <div class="response-actions" id="response-actions">
+        <button class="btn btn-primary" onclick="validateResponse()">✓ Envoyé</button>
+        <button class="btn btn-secondary" onclick="editResponse()">✏️ Corriger</button>
+        <button class="btn btn-danger" onclick="regenerate()">↺</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: CONTACT DETAIL -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen" id="screen-detail">
+  <div class="header">
+    <div class="header-inner">
+      <button class="back-btn" onclick="showScreen('chat')">←</button>
+      <div>
+        <h1 id="detail-name">Fiche contact</h1>
+        <div class="header-sub">Informations</div>
+      </div>
+    </div>
+  </div>
+  <div class="content" id="detail-content"></div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: SETTINGS -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen" id="screen-settings">
+  <div class="header">
+    <div class="header-inner">
+      <button class="back-btn" onclick="showScreen('contacts')">←</button>
+      <h1>Réglages</h1>
+    </div>
+  </div>
+  <div class="content">
+    <div class="detail-section">
+      <h3>Persona active</h3>
+      <div class="detail-value" id="settings-persona">...</div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-secondary" style="width:100%" onclick="openPersonaModal()">🎭 Changer de persona</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MODAL: PERSONA SWITCHER -->
+<!-- ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="persona-modal">
+  <div class="modal">
+    <h2>Changer de persona</h2>
+    <div class="persona-list" id="persona-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('persona-modal')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MODAL: LINK WHATSAPP -->
+<!-- ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="link-whatsapp-modal">
+  <div class="modal">
+    <h2>Lier un numéro WhatsApp</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Le bot WhatsApp reconnaîtra automatiquement ce contact et chargera tout son historique.</p>
+    <label class="modal-label">Numéro WhatsApp *</label>
+    <input class="modal-input" id="link-phone-input" placeholder="+33612345678" type="tel">
+    <p style="font-size:12px;color:var(--text2);margin-top:4px">Format international avec le + (ex: +33612345678)</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="linkWhatsapp()">🔗 Lier</button>
+      <button class="btn btn-secondary" onclick="closeModal('link-whatsapp-modal')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MODAL: CREATE PERSONA -->
+<!-- ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="create-persona-modal">
+  <div class="modal">
+    <h2>Nouvelle persona</h2>
+    <label class="modal-label">Prénom *</label>
+    <input class="modal-input" id="new-persona-nom" placeholder="Sophie, Marc, Emma...">
+    <label class="modal-label">Profil complet * (âge, ville, situation, personnalité, règles...)</label>
+    <textarea class="modal-input" id="new-persona-profil" rows="8" placeholder="Tu es Sophie, 32 ans, basée à Paris..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="createPersona()">✓ Créer</button>
+      <button class="btn btn-secondary" onclick="closeModal('create-persona-modal')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MODAL: EDIT CONTACT INFOS -->
+<!-- ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="edit-infos-modal">
+  <div class="modal">
+    <h2>Modifier les infos</h2>
+    <label class="modal-label">Infos sur lui</label>
+    <textarea class="modal-input" id="edit-infos-input" rows="4" placeholder="Profession, ville, ce qu'il a dit, numéro donné ou pas..."></textarea>
+    <label class="modal-label">Points communs</label>
+    <textarea class="modal-input" id="edit-communs-input" rows="2" placeholder="Cuisine, voyages, humour..."></textarea>
+    <label class="modal-label">Frictions</label>
+    <textarea class="modal-input" id="edit-friction-input" rows="2" placeholder="Distance, enfants, âge..."></textarea>
+    <label class="modal-label">Stade</label>
+    <select class="modal-input" id="edit-stade-input">
+      <option value="debut">Début</option>
+      <option value="connaissance">Connaissance</option>
+      <option value="attachement">Attachement</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveContactInfos()">💾 Sauvegarder</button>
+      <button class="btn btn-secondary" onclick="closeModal('edit-infos-modal')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MODAL: ADD CONTACT -->
+<!-- ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="add-contact-modal">
+  <div class="modal">
+    <h2>Nouveau contact</h2>
+    <label class="modal-label">Prénom *</label>
+    <input class="modal-input" id="new-contact-nom" placeholder="Pierre, Bruno...">
+    <label class="modal-label">Plateforme</label>
+    <select class="modal-input" id="new-contact-plateforme">
+      <option value="meetic">Meetic</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="tinder">Tinder</option>
+      <option value="autre">Autre</option>
+    </select>
+    <label class="modal-label">Registre</label>
+    <select class="modal-input" id="new-contact-registre">
+      <option value="tutoiement">Tutoiement</option>
+      <option value="vouvoiement">Vouvoiement</option>
+    </select>
+    <label class="modal-label">Infos (optionnel)</label>
+    <input class="modal-input" id="new-contact-infos" placeholder="Profession, ville, détails...">
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addContact()">Ajouter</button>
+      <button class="btn btn-secondary" onclick="closeModal('add-contact-modal')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let currentContact = null;
+let currentMessage = '';
+let currentResponse = '';
+let activePersona = '';
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch(`${API}/api/status`);
+    const data = await res.json();
+    activePersona = data.persona;
+    document.getElementById('persona-name').textContent = data.persona;
+    document.getElementById('header-sub').textContent = `${data.contacts_count} contacts · ${data.persona}`;
+    document.getElementById('settings-persona').textContent = data.persona;
+  } catch(e) {
+    document.getElementById('header-sub').textContent = 'Serveur non accessible';
+  }
+  loadContacts();
+}
+
+// ── CONTACTS ──────────────────────────────────────────────────────────────────
+async function loadContacts() {
+  try {
+    const res = await fetch(`${API}/api/contacts`);
+    const contacts = await res.json();
+    renderContacts(contacts);
+  } catch(e) {
+    document.getElementById('contacts-list').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Connexion impossible</div>
+        <div style="font-size:13px;margin-top:8px">Vérifie que le serveur tourne sur ton Mac.</div>
+      </div>`;
+  }
+}
+
+function renderContacts(contacts) {
+  const list = document.getElementById('contacts-list');
+  if (!contacts.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">💌</div><div class="empty-title">Aucun contact</div><div style="font-size:13px">Appuie sur + pour ajouter un contact.</div></div>`;
+    return;
+  }
+  list.innerHTML = `<div class="contacts-grid">${contacts.map(c => `
+    <div class="contact-card" onclick="openContact('${c.nom}', '${c.stade}', '${c.plateforme}')">
+      <div class="contact-top">
+        <div class="contact-avatar">${c.nom.charAt(0).toUpperCase()}</div>
+        <div class="contact-info">
+          <div class="contact-name">${c.nom}</div>
+          <div class="contact-meta">
+            <span class="stade-badge stade-${c.stade}">${c.stade}</span>
+            · ${c.plateforme}
+          </div>
+        </div>
+        <div class="contact-count">${c.messages_count} msg</div>
+      </div>
+      ${c.last_message ? `<div class="contact-preview">${c.last_message}</div>` : ''}
+    </div>
+  `).join('')}</div>`;
+}
+
+// ── OPEN CONTACT ──────────────────────────────────────────────────────────────
+async function openContact(nom, stade, plateforme) {
+  currentContact = nom;
+  document.getElementById('chat-name').textContent = nom;
+  document.getElementById('chat-sub').textContent = `${stade} · ${plateforme}`;
+  document.getElementById('input-contact-label').textContent = `Répondre pour ${activePersona} → ${nom}`;
+  document.getElementById('response-preview').classList.remove('visible');
+  document.getElementById('msg-input').value = '';
+
+  showScreen('chat');
+  await loadHistory(nom);
+}
+
+async function loadHistory(nom) {
+  const container = document.getElementById('chat-messages');
+  try {
+    const res = await fetch(`${API}/api/contact/${nom}/history`);
+    const data = await res.json();
+    if (!data.history.length) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">✉️</div><div class="empty-title">Début de la conversation</div><div style="font-size:13px">Colle un message reçu pour générer une réponse.</div></div>`;
+      return;
+    }
+    container.innerHTML = data.history.map(h => `
+      <div class="msg ${h.is_bot ? 'from-bot' : 'from-lui'}">
+        <div class="msg-bubble">${h.content}</div>
+        <div class="msg-time">${h.date} ${h.is_bot ? '· ' + data.persona : ''}</div>
+      </div>
+    `).join('');
+    container.scrollTop = container.scrollHeight;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Erreur</div></div>`;
+  }
+}
+
+// ── GENERATE RESPONSE ─────────────────────────────────────────────────────────
+async function generateResponse() {
+  const msg = document.getElementById('msg-input').value.trim();
+  if (!msg || !currentContact) return;
+  currentMessage = msg;
+  const context = document.getElementById('context-input').value.trim();
+
+  const preview = document.getElementById('response-preview');
+  const loading = document.getElementById('loading-indicator');
+  const responseText = document.getElementById('response-text');
+  const actions = document.getElementById('response-actions');
+  const editArea = document.getElementById('edit-area');
+  const sendBtn = document.getElementById('send-btn');
+
+  preview.classList.add('visible');
+  loading.style.display = 'flex';
+  responseText.textContent = '';
+  actions.style.display = 'none';
+  editArea.classList.remove('visible');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '⏳';
+  sendBtn.style.opacity = '0.7';
+
+  try {
+    const res = await fetch(`${API}/api/generate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({contact: currentContact, message: msg, context: context})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    currentResponse = data.response;
+    responseText.textContent = data.response;
+    loading.style.display = 'none';
+    actions.style.display = 'flex';
+  } catch(e) {
+    loading.style.display = 'none';
+    responseText.textContent = `❌ Erreur: ${e.message}`;
+    actions.style.display = 'flex';
+  }
+  sendBtn.disabled = false;
+  sendBtn.textContent = '✨';
+  sendBtn.style.opacity = '1';
+}
+
+async function validateResponse() {
+  try {
+    await fetch(`${API}/api/save`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        contact: currentContact,
+        message_recu: currentMessage,
+        reponse_envoyee: currentResponse
+      })
+    });
+    document.getElementById('response-preview').classList.remove('visible');
+    document.getElementById('msg-input').value = '';
+    document.getElementById('context-input').value = '';
+    showToast('✓ Échange sauvegardé', 'success');
+    await loadHistory(currentContact);
+    // Auto-scroll vers le bas
+    const chatMsgs = document.getElementById('chat-messages');
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  } catch(e) {
+    showToast('Erreur sauvegarde', 'error');
+  }
+}
+
+function editResponse() {
+  document.getElementById('edit-input').value = currentResponse;
+  document.getElementById('edit-area').classList.add('visible');
+  document.getElementById('response-actions').style.display = 'none';
+}
+
+function saveEdited() {
+  currentResponse = document.getElementById('edit-input').value.trim();
+  document.getElementById('response-text').textContent = currentResponse;
+  document.getElementById('edit-area').classList.remove('visible');
+  document.getElementById('response-actions').style.display = 'flex';
+}
+
+function cancelEdit() {
+  document.getElementById('edit-area').classList.remove('visible');
+  document.getElementById('response-actions').style.display = 'flex';
+}
+
+async function regenerate() {
+  document.getElementById('msg-input').value = currentMessage;
+  await generateResponse();
+}
+
+// ── PERSONA ───────────────────────────────────────────────────────────────────
+async function openPersonaModal() {
+  try {
+    const res = await fetch(`${API}/api/personas`);
+    const personas = await res.json();
+    const list = document.getElementById('persona-list');
+    list.innerHTML = personas.map(p => `
+      <div class="persona-item ${p.nom.toLowerCase() === activePersona.toLowerCase() ? 'active-persona' : ''}"
+           onclick="switchPersona('${p.slug}', '${p.nom}')">
+        <div class="contact-avatar" style="width:36px;height:36px;font-size:15px">${p.nom.charAt(0)}</div>
+        <div class="persona-item-name">${p.nom}</div>
+        ${p.nom.toLowerCase() === activePersona.toLowerCase() ? '<span class="persona-item-check">✓</span>' : ''}
+        ${p.nom.toLowerCase() !== 'laurine' ? `<span onclick="event.stopPropagation(); deletePersona('${p.slug}', '${p.nom}')" style="margin-left:auto;color:var(--red);font-size:18px;padding:4px 8px;">🗑</span>` : ''}
+      </div>
+    `).join('') + `
+      <div class="persona-item" onclick="closeModal('persona-modal'); openCreatePersonaModal()">
+        <div class="contact-avatar" style="width:36px;height:36px;font-size:15px;background:rgba(201,169,110,0.2)">+</div>
+        <div class="persona-item-name" style="color:var(--accent)">Creer une nouvelle persona</div>
+      </div>`;
+  } catch(e) {}
+  document.getElementById('persona-modal').classList.add('visible');
+}
+
+function openCreatePersonaModal() {
+  document.getElementById('new-persona-nom').value = '';
+  document.getElementById('new-persona-profil').value = '';
+  document.getElementById('create-persona-modal').classList.add('visible');
+}
+
+async function togglePause() {
+  if (!currentContact || !currentContactData) return;
+  const newPaused = !currentContactData.paused;
+  try {
+    const res = await fetch(`${API}/api/contact/pause`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom: currentContact, paused: newPaused})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    currentContactData.paused = newPaused;
+    showToast(newPaused ? '⏸ Bot en pause pour ' + currentContact : '▶ Bot réactivé pour ' + currentContact, 'success');
+    await showDetail();
+    await loadContacts();
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+
+async function deleteContact() {
+  if (!currentContact) return;
+  if (!confirm('Supprimer ' + currentContact + ' et tout son historique ?')) return;
+  try {
+    const res = await fetch(`${API}/api/contact/delete`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom: currentContact})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    showToast(currentContact + ' supprimé', 'success');
+    currentContact = null;
+    showScreen('contacts');
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+
+function openLinkWhatsappModal() {
+  document.getElementById('link-phone-input').value = '';
+  document.getElementById('link-whatsapp-modal').classList.add('visible');
+}
+
+async function linkWhatsapp() {
+  const phone = document.getElementById('link-phone-input').value.trim();
+  if (!phone) { showToast('Numéro requis', 'error'); return; }
+  if (!currentContact) { showToast('Aucun contact sélectionné', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/api/contact/link`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({phone, contact: currentContact})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    closeModal('link-whatsapp-modal');
+    showToast('📱 ' + currentContact + ' lié à ' + phone, 'success');
+    await showDetail();
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+
+async function deletePersona(slug, nom) {
+  if (!confirm('Supprimer la persona ' + nom + ' ?')) return;
+  try {
+    const res = await fetch(`${API}/api/persona/delete`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom: slug})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    showToast(nom + ' supprimee', 'success');
+    openPersonaModal();
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+
+async function createPersona() {
+  const nom = document.getElementById('new-persona-nom').value.trim();
+  const profil = document.getElementById('new-persona-profil').value.trim();
+  if (!nom || !profil) { showToast('Nom et profil requis', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/api/persona/create`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom, profil})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    closeModal('create-persona-modal');
+    showToast('Persona creee !', 'success');
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+
+async function switchPersona(slug, nom) {
+  try {
+    await fetch(`${API}/api/persona/switch`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom: slug})
+    });
+    activePersona = nom;
+    document.getElementById('persona-name').textContent = nom;
+    document.getElementById('settings-persona').textContent = nom;
+    closeModal('persona-modal');
+    showToast(`Persona : ${nom}`, 'success');
+  } catch(e) {
+    showToast('Erreur', 'error');
+  }
+}
+
+// ── ADD CONTACT ───────────────────────────────────────────────────────────────
+function openAddContactModal() {
+  document.getElementById('new-contact-nom').value = '';
+  document.getElementById('new-contact-infos').value = '';
+  document.getElementById('add-contact-modal').classList.add('visible');
+}
+
+async function addContact() {
+  const nom = document.getElementById('new-contact-nom').value.trim();
+  if (!nom) { showToast('Prénom requis', 'error'); return; }
+  try {
+    await fetch(`${API}/api/contact/add`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        nom,
+        plateforme: document.getElementById('new-contact-plateforme').value,
+        registre: document.getElementById('new-contact-registre').value,
+        infos: document.getElementById('new-contact-infos').value
+      })
+    });
+    closeModal('add-contact-modal');
+    showToast(`${nom} ajouté`, 'success');
+    loadContacts();
+  } catch(e) {
+    showToast('Erreur', 'error');
+  }
+}
+
+// ── DETAIL ────────────────────────────────────────────────────────────────────
+let currentContactData = null;
+
+async function showDetail() {
+  if (!currentContact) return;
+  try {
+    const res = await fetch(`${API}/api/contacts`);
+    const contacts = await res.json();
+    const c = contacts.find(x => x.nom === currentContact);
+    if (!c) return;
+    currentContactData = c;
+    document.getElementById('detail-name').textContent = c.nom;
+    document.getElementById('detail-content').innerHTML = `
+      <div class="detail-section">
+        <h3>Stade</h3>
+        <div class="detail-value"><span class="stade-badge stade-${c.stade}">${c.stade}</span></div>
+      </div>
+      <div class="detail-section">
+        <h3>Plateforme</h3>
+        <div class="detail-value">${c.plateforme}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Registre</h3>
+        <div class="detail-value">${c.registre}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Infos</h3>
+        <div class="detail-value" id="detail-infos">${c.infos || '—'}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Points communs</h3>
+        <div class="detail-value" id="detail-communs">${c.points_communs || '—'}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Frictions</h3>
+        <div class="detail-value" id="detail-friction">${c.friction || '—'}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Messages en mémoire</h3>
+        <div class="detail-value">${c.messages_count} / 150</div>
+      </div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" style="width:100%" onclick="openEditInfosModal()">✏️ Modifier les infos</button>
+        <button class="btn btn-secondary" style="width:100%" onclick="openLinkWhatsappModal()">📱 Lier un numéro WhatsApp</button>
+        <button class="btn ${c.paused ? 'btn-primary' : 'btn-secondary'}" id="pause-btn" style="width:100%" onclick="togglePause()">${c.paused ? '▶ Réactiver le bot' : '⏸ Mettre en pause'}</button>
+        <button class="btn btn-danger" style="width:100%" onclick="deleteContact()">🗑 Supprimer ce contact</button>
+      </div>
+    `;
+  } catch(e) {}
+}
+
+function openEditInfosModal() {
+  if (!currentContactData) return;
+  document.getElementById('edit-infos-input').value = currentContactData.infos || '';
+  document.getElementById('edit-communs-input').value = currentContactData.points_communs || '';
+  document.getElementById('edit-friction-input').value = currentContactData.friction || '';
+  const stadeSelect = document.getElementById('edit-stade-input');
+  stadeSelect.value = currentContactData.stade || 'debut';
+  document.getElementById('edit-infos-modal').classList.add('visible');
+}
+
+async function saveContactInfos() {
+  const infos = document.getElementById('edit-infos-input').value.trim();
+  const communs = document.getElementById('edit-communs-input').value.trim();
+  const friction = document.getElementById('edit-friction-input').value.trim();
+  const stade = document.getElementById('edit-stade-input').value;
+  try {
+    await fetch(`${API}/api/contact/${currentContact}/update`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({infos, points_communs: communs, friction, stade})
+    });
+    closeModal('edit-infos-modal');
+    showToast('✓ Infos mises à jour', 'success');
+    await showDetail();
+  } catch(e) {
+    showToast('Erreur sauvegarde', 'error');
+  }
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (name === 'contacts') {
+    document.getElementById('screen-contacts').classList.add('active');
+    document.querySelectorAll('.nav-item')[0].classList.add('active');
+    loadContacts();
+  } else if (name === 'chat') {
+    document.getElementById('screen-chat').classList.add('active');
+  } else if (name === 'detail') {
+    document.getElementById('screen-detail').classList.add('active');
+    showDetail();
+  } else if (name === 'settings') {
+    document.getElementById('screen-settings').classList.add('active');
+    document.querySelectorAll('.nav-item')[1].classList.add('active');
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+
+function showToast(msg, type='') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = `toast visible ${type}`;
+  setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+document.getElementById('msg-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generateResponse(); }
+});
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('visible');
+  });
+});
+
+init();
+</script>
+</body>
+</html>
