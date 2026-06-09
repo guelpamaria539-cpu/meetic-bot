@@ -281,15 +281,6 @@ body {
 .translate-result { display: none; margin-top: 8px; background: rgba(107,159,212,0.08); border: 1px solid rgba(107,159,212,0.25); border-radius: 10px; padding: 10px 12px; font-size: 14px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .translate-result.visible { display: block; }
 .translate-label { font-size: 10px; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-
-/* ── TRANSLATE BUTTONS ── */
-.translate-bar { display: none; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.translate-bar.visible { display: flex; }
-.btn-translate { padding: 7px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); font-family: 'DM Sans', sans-serif; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-.btn-translate.active { border-color: rgba(201,169,110,0.5); color: var(--accent); background: rgba(201,169,110,0.1); }
-.translate-result { display: none; margin-top: 8px; background: rgba(107,159,212,0.08); border: 1px solid rgba(107,159,212,0.25); border-radius: 10px; padding: 10px 12px; font-size: 14px; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
-.translate-result.visible { display: block; }
-.translate-label { font-size: 10px; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -372,16 +363,6 @@ body {
           <button class="btn btn-primary" onclick="saveEdited()">Sauvegarder</button>
           <button class="btn btn-secondary" onclick="cancelEdit()">Annuler</button>
         </div>
-      </div>
-      <div class="translate-bar" id="translate-bar">
-        <button class="btn-translate" onclick="translateResponse('en')" id="btn-en">🇬🇧 EN</button>
-        <button class="btn-translate" onclick="translateResponse('de')" id="btn-de">🇩🇪 DE</button>
-        <button class="btn-translate" onclick="translateResponse('it')" id="btn-it">🇮🇹 IT</button>
-        <button class="btn-translate" onclick="clearTranslation()">✕</button>
-      </div>
-      <div class="translate-result" id="translate-result">
-        <div class="translate-label" id="translate-label"></div>
-        <div id="translate-text"></div>
       </div>
       <div class="translate-bar" id="translate-bar">
         <button class="btn-translate" onclick="translateResponse('en')" id="btn-en">EN</button>
@@ -660,6 +641,8 @@ async function generateResponse() {
   actions.style.display = 'none';
   editArea.classList.remove('visible');
   sendBtn.disabled = true;
+  sendBtn.textContent = '⏳';
+  sendBtn.style.opacity = '0.7';
 
   try {
     const res = await fetch(`${API}/api/generate`, {
@@ -681,6 +664,8 @@ async function generateResponse() {
     actions.style.display = 'flex';
   }
   sendBtn.disabled = false;
+  sendBtn.textContent = '✨';
+  sendBtn.style.opacity = '1';
 }
 
 async function validateResponse() {
@@ -699,6 +684,9 @@ async function validateResponse() {
     document.getElementById('context-input').value = '';
     showToast('✓ Échange sauvegardé', 'success');
     await loadHistory(currentContact);
+    // Auto-scroll vers le bas
+    const chatMsgs = document.getElementById('chat-messages');
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
   } catch(e) {
     showToast('Erreur sauvegarde', 'error');
   }
@@ -754,6 +742,26 @@ function openCreatePersonaModal() {
   document.getElementById('new-persona-nom').value = '';
   document.getElementById('new-persona-profil').value = '';
   document.getElementById('create-persona-modal').classList.add('visible');
+}
+
+async function togglePause() {
+  if (!currentContact || !currentContactData) return;
+  const newPaused = !currentContactData.paused;
+  try {
+    const res = await fetch(`${API}/api/contact/pause`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({nom: currentContact, paused: newPaused})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    currentContactData.paused = newPaused;
+    showToast(newPaused ? '⏸ Bot en pause pour ' + currentContact : '▶ Bot réactivé pour ' + currentContact, 'success');
+    await showDetail();
+    await loadContacts();
+  } catch(e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
 }
 
 async function deleteContact() {
@@ -926,6 +934,7 @@ async function showDetail() {
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
         <button class="btn btn-primary" style="width:100%" onclick="openEditInfosModal()">✏️ Modifier les infos</button>
         <button class="btn btn-secondary" style="width:100%" onclick="openLinkWhatsappModal()">📱 Lier un numéro WhatsApp</button>
+        <button class="btn ${c.paused ? 'btn-primary' : 'btn-secondary'}" id="pause-btn" style="width:100%" onclick="togglePause()">${c.paused ? '▶ Réactiver le bot' : '⏸ Mettre en pause'}</button>
         <button class="btn btn-danger" style="width:100%" onclick="deleteContact()">🗑 Supprimer ce contact</button>
       </div>
     `;
@@ -1005,45 +1014,6 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (e.target === this) this.classList.remove('visible');
   });
 });
-
-
-let currentLang = null;
-async function translateResponse(lang) {
-  if (!currentResponse) return;
-  if (currentLang === lang) { clearTranslation(); return; }
-  document.querySelectorAll('.btn-translate').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('btn-' + lang);
-  if (btn) btn.classList.add('active');
-  currentLang = lang;
-  const resultBox = document.getElementById('translate-result');
-  const resultText = document.getElementById('translate-text');
-  const resultLabel = document.getElementById('translate-label');
-  resultBox.classList.add('visible');
-  resultLabel.textContent = '⏳ Traduction...';
-  resultText.textContent = '';
-  try {
-    const res = await fetch(`${API}/api/translate`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ texte: currentResponse, langue: lang })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    const flags = { en: '🇬🇧', de: '🇩🇪', it: '🇮🇹' };
-    resultLabel.textContent = flags[lang] + ' ' + data.langue_nom.toUpperCase();
-    resultText.textContent = data.traduit;
-  } catch(e) {
-    resultLabel.textContent = '❌ Erreur';
-    resultText.textContent = e.message;
-  }
-}
-function clearTranslation() {
-  currentLang = null;
-  document.querySelectorAll('.btn-translate').forEach(b => b.classList.remove('active'));
-  const box = document.getElementById('translate-result');
-  if (box) box.classList.remove('visible');
-  const txt = document.getElementById('translate-text');
-  if (txt) txt.textContent = '';
-}
 
 
 let currentLang = null;
