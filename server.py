@@ -242,7 +242,8 @@ def get_temporal_context():
     Retourne un contexte temporel complet : date, heure, moment de la journée,
     jour de semaine, contexte de vie de la persona, et indication weekend/semaine.
     """
-    now = datetime.datetime.now()
+    import zoneinfo
+    now = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris"))
     jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
     mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin",
                "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
